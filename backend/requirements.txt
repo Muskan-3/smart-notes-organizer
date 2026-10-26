@@ -5,3 +5,4 @@ easyocr
 faster-whisper
 google-genai
 python-dotenv
+sqlalchemy
