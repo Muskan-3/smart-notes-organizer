@@ -1,6 +1,6 @@
 # The Note table: one row per processed note (PDF, image, or audio).
 
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, Boolean
 from sqlalchemy.sql import func
 
 from db.database import Base
@@ -17,4 +17,5 @@ class Note(Base):
     summary = Column(Text, nullable=False)
     tags = Column(JSON, nullable=False)  # stored as a JSON list, e.g. ["cloud", "aws", ...]
     category = Column(String, nullable=False)
+    needs_review = Column(Boolean, nullable=False, default=False)  # True if extraction quality was low
     created_at = Column(DateTime(timezone=True), server_default=func.now())

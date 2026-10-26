@@ -5,7 +5,7 @@ from db.database import SessionLocal
 from db.models import Note
 
 
-def save_note(filename, file_type, extracted_text, title, summary, tags, category):
+def save_note(filename, file_type, extracted_text, title, summary, tags, category, needs_review=False):
     """Creates a new note row and returns it."""
     db = SessionLocal()
     try:
@@ -17,6 +17,7 @@ def save_note(filename, file_type, extracted_text, title, summary, tags, categor
             summary=summary,
             tags=tags,
             category=category,
+            needs_review=needs_review,
         )
         db.add(note)
         db.commit()

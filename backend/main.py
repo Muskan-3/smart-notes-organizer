@@ -10,25 +10,10 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from db.database import init_db
-from db.crud import save_note, list_notes, get_note, delete_note, search_notes
-from extractors.pdf_extractor import extract_text_from_pdf
-from extractors.image_extractor import extract_text_from_image
-from extractors.audio_extractor import extract_text_from_audio
-from ai.analyzer import analyze_note
+from db.crud import list_notes, get_note, delete_note, search_notes
+from agent.agent import run_agent, EXTENSION_TO_TYPE
 
 UPLOAD_DIR = "uploads"
-
-# Maps a file extension to the note's file_type. Also used to reject
-# unsupported file types before we try to process anything.
-EXTENSION_TO_TYPE = {
-    ".pdf": "pdf",
-    ".jpg": "image",
-    ".jpeg": "image",
-    ".png": "image",
-    ".mp3": "audio",
-    ".wav": "audio",
-    ".m4a": "audio",
-}
 
 
 @asynccontextmanager
@@ -56,15 +41,6 @@ def read_root():
     return {"message": "Notes Organizer is running"}
 
 
-def _extract_text(file_type: str, file_path: str) -> str:
-    """Runs the extractor that matches the file type and returns plain text."""
-    if file_type == "pdf":
-        return extract_text_from_pdf(file_path)
-    if file_type == "image":
-        return extract_text_from_image(file_path)["text"]
-    return extract_text_from_audio(file_path)["text"]  # only "audio" is left
-
-
 def _note_to_dict(note) -> dict:
     """Converts a Note database row into a plain dict FastAPI can return as JSON."""
     return {
@@ -76,6 +52,7 @@ def _note_to_dict(note) -> dict:
         "summary": note.summary,
         "tags": note.tags,
         "category": note.category,
+        "needs_review": note.needs_review,
         "created_at": note.created_at.isoformat() if note.created_at else None,
     }
 
@@ -102,30 +79,17 @@ async def upload_note(file: UploadFile = File(...)):
         saved_file.write(contents)
 
     try:
-        extracted_text = _extract_text(file_type, saved_path)
+        result = run_agent(saved_path, original_filename=original_name)
     except (FileNotFoundError, ValueError) as e:
-        # Bad/unreadable/empty file — the user should fix the file and retry.
-        raise HTTPException(status_code=400, detail=str(e))
-
-    try:
-        analysis = analyze_note(extracted_text)
-    except ValueError as e:
+        # Bad/unreadable/empty file, or no usable text found — the user should fix the file and retry.
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         # LLM problem (bad key, rate limit, no internet, bad JSON) — not the user's file.
         raise HTTPException(status_code=502, detail=str(e))
 
-    note = save_note(
-        filename=original_name,
-        file_type=file_type,
-        extracted_text=extracted_text,
-        title=analysis["title"],
-        summary=analysis["summary"],
-        tags=analysis["tags"],
-        category=analysis["category"],
-    )
-
-    return _note_to_dict(note)
+    note_dict = _note_to_dict(result["note"])
+    note_dict["steps_log"] = result["steps_log"]
+    return note_dict
 
 
 @app.get("/notes")
