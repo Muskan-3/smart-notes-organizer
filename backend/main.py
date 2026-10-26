@@ -10,7 +10,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from db.database import init_db
-from db.crud import save_note, list_notes, get_note, delete_note
+from db.crud import save_note, list_notes, get_note, delete_note, search_notes
 from extractors.pdf_extractor import extract_text_from_pdf
 from extractors.image_extractor import extract_text_from_image
 from extractors.audio_extractor import extract_text_from_audio
@@ -147,3 +147,16 @@ def delete_one_note(note_id: int):
     if not was_deleted:
         raise HTTPException(status_code=404, detail=f"Note {note_id} not found.")
     return {"message": f"Note {note_id} deleted."}
+
+
+@app.get("/search")
+def search(q: str = ""):
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Search query 'q' cannot be empty.")
+
+    results = []
+    for note, matched_in in search_notes(q):
+        note_dict = _note_to_dict(note)
+        note_dict["matched_in"] = matched_in
+        results.append(note_dict)
+    return results
